@@ -20,8 +20,8 @@ fn write_eventfd(fd: RawFd, n: usize) {
     let ptr = &n as *const usize as *const u8;
 
     let val = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of_val(&n)) };
-    
-    let fd = unsafe{ OwnedFd::from_raw_fd(fd)}
+
+    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
 
     write(&fd, &val).unwrap();
 }
@@ -31,7 +31,7 @@ enum IOOps {
     REMOVE(RawFd),
 }
 
-struct IOSelector {
+pub struct IOSelector {
     wakers: Mutex<HashMap<RawFd, Waker>>,
     queue: Mutex<VecDeque<IOOps>>,
     epfd: RawFd,
@@ -39,7 +39,7 @@ struct IOSelector {
 }
 
 impl IOSelector {
-    fn new() -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         let s = IOSelector {
             wakers: Mutex::new(HashMap::new()),
             queue: Mutex::new(VecDeque::new()),
@@ -55,7 +55,7 @@ impl IOSelector {
         result
     }
 
-    fn add_event(
+    pub fn add_event(
         &self,
         flag: EpollFlags,
         fd: RawFd,
@@ -81,14 +81,14 @@ impl IOSelector {
         wakers.insert(fd, waker);
     }
 
-    fn rm_event(&self, fd: RawFd, wakers: &mut HashMap<RawFd, Waker>) {
+    pub fn rm_event(&self, fd: RawFd, wakers: &mut HashMap<RawFd, Waker>) {
         let epoll_del = EpollOp::EpollCtlDel;
         let mut ev = EpollEvent::new(EpollFlags::empty(), fd as u64);
         epoll_ctl(self.epfd, epoll_del, fd, &mut ev).ok();
         wakers.remove(&fd);
     }
 
-    fn select(&self) {
+    pub fn select(&self) {
         let epoll_in = EpollFlags::EPOLLIN;
         let epoll_add = EpollOp::EpollCtlAdd;
 
@@ -119,13 +119,13 @@ impl IOSelector {
         }
     }
 
-    fn register(&self, flags: EpollFlags, fd: RawFd, waker: Waker) {
+    pub fn register(&self, flags: EpollFlags, fd: RawFd, waker: Waker) {
         let mut q = self.queue.lock().unwrap();
         q.push_back(IOOps::ADD(flags, fd, waker));
         write_eventfd(self.event, 1);
     }
 
-    fn unregister(&self, fd: RawFd) {
+    pub fn unregister(&self, fd: RawFd) {
         let mut q = self.queue.lock().unwrap();
         q.push_back(IOOps::REMOVE(fd));
         write_eventfd(self.event, 1);
